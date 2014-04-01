@@ -1,0 +1,81 @@
+#[
+	Issues:
+		- Not optimized
+		- Bot could follow in front of target instead of behind, needs to track target
+		viewpoint and accommodate accordingly
+]#
+@name Target Controller
+@inputs 
+@outputs Height:number
+@persist Tail Height:number This:entity E:entity TargetEnt:entity DistanceVec:vector
+@trigger 
+
+
+if(first()){
+    This = entity()
+    This:setMass(0)
+    E = This:isWeldedTo()
+    Tail = 0
+    runOnChat(1)
+    runOnTick(1)
+    DistanceVec = vec(100,50,0)
+    TargetEnt = noentity()
+}
+
+if(lastSpoke() == This:owner() && chatClk() == 1){
+    Text = lastSaid()
+    if(Text:sub(0,8) == "!follow "){
+        hint("Aquiring Target...",5)
+        Target = Text:replace("!follow ", ""):trim()
+        TargetEnt = findPlayerByName(Target)
+        if(TargetEnt:id() != 0){
+            hint("Target Aquired!",5)
+            E:soundPlay(2,1,"npc/scanner/scanner_siren1.wav")
+        } else {
+            hint("Could not find: "+Target,5)
+            TargetEnt = noentity()
+        }
+    }
+    if(Text:sub(0,7) == "!stalk "){
+        hint("Changing stalk distance",5)
+        Split = Text:replace("!stalk ", ""):trim():explode(",")
+        X = Split[1,string]:toNumber()
+        Y = Split[2,string]:toNumber()
+        DistanceVec = vec(X,Y,0)
+    }
+    if(Text:sub(0,7) == "!hover "){
+        hint("Changing hover height",5)
+        Height = Text:replace("!hover ", ""):trim():toNumber()
+        This:owner():soundPlay(1,2,"npc/attack_helicopter/aheli_charge_up.wav")
+    }
+    if(Text == "!stay"){
+        TargetEnt = noentity()
+        E:soundPlay(2,1,"npc/dog/dog_idle4.wav")
+        hint("Staying put",5)
+    }
+    if(Text == "!come") {
+        TargetEnt = This:owner()
+        E:soundPlay(2,1,"npc/scanner/scanner_siren1.wav")
+    }
+    if(Text == "!tail"){
+        if(Tail){
+            E:removeTrails()
+            Tail = 0
+        } else {
+            Tail = 1
+            E:setTrails(35,0,3,"trails/electric",vec(0,140,233),255)
+        }
+    }
+}
+
+if(TargetEnt != noentity()){
+    DistPos = (TargetEnt:pos()+DistanceVec)
+    XForce = (DistPos:x() - E:pos():x())
+    YForce = (DistPos:y() - E:pos():y())
+    E:applyForce(vec(XForce,YForce,0))
+	#Smooths travel, uncontrolled acceleration otherwise
+    E:applyForce(-E:vel())
+} else {
+    E:applyForce(-E:vel())
+}
+

@@ -1,0 +1,182 @@
+#[
+	Issues:
+		- Has clockwise tendency when determining direction which gets the bot stop in
+		certain situations
+		- Re-implementation of the Hover_Controller, could be removed and replace with
+		a Hover_Controller SoC
+]#
+@name Autonomous Controller
+@inputs Height:number
+@outputs DebugText:string
+@persist HullSize:vector TMass TIner:vector Dheight:number E:entity Target This:entity DebugText:string RD:ranger
+@persist Phase PhaseTarget
+@trigger 
+
+function defineRanger(){
+    rangerHitWater(1)
+    rangerHitEntities(1)
+    rangerDefaultZero(1)
+    rangerPersist(1)
+}
+
+#We implement the Hover Controller for Hover and Stabilization
+
+if(first()){
+    This = entity()
+    This:setMass(0)
+    E = This:isWeldedTo()
+    E:setColor(vec(255,255,255),255)
+    Target = 30+E:height()
+    Dheight  = 50 + E:pos():z()
+    runOnTick(1)
+    #E:soundPlay(3,0,"npc/dog/dog_idlemode_loop1.wav")
+    TMass = E:mass()
+    TIner = E:inertia()
+    foreach(K,V:entity=E:getConstraints()){
+        V:setMass(0)
+    }
+    HullSize = vec(E:boxSize():y()+10,E:boxSize():y(),1)
+    holoCreate(1)
+    holoScale(1,HullSize/12)
+    holoCreate(2)
+    holoScale(2,HullSize/12)
+    holoCreate(3)
+    holoScale(3,HullSize/12)
+    holoCreate(4)
+    holoScale(4,HullSize/12)
+    defineRanger()
+}
+#vec(X,Y,Z)
+W = E:boxSize():y()+20
+Yaw = E:angles():yaw()
+#Direction Vectors
+LV = vec(cos(Yaw+90),sin(Yaw+90),0)
+RV = vec(cos(Yaw-90),sin(Yaw-90),0)
+FV = vec(cos(Yaw),sin(Yaw),0)
+BV = vec(cos(Yaw+180),sin(Yaw+180),0)
+#Rangers
+RD = rangerOffset(1000,This:pos(),vec(0,0,-1))
+RR = rangerOffsetHull(W,This:pos()+vec(0,0,-5),RV,HullSize)
+RL = rangerOffsetHull(W,This:pos()+vec(0,0,-5),LV,HullSize)
+RF = rangerOffsetHull(W,This:pos()+vec(0,0,-5),FV,HullSize)
+RB = rangerOffsetHull(W,This:pos()+vec(0,0,-5),BV,HullSize)
+#Hologram Visuals
+holoPos(1,RR:pos())
+holoAng(1,ang(0,Yaw-90,0))
+holoPos(2,RL:pos())
+holoAng(2,ang(0,Yaw+90,0))
+holoPos(3,RF:pos())
+holoAng(3,ang(0,Yaw,0))
+holoPos(4,RB:pos())
+holoAng(4,ang(0,Yaw+180,0))
+
+
+function number isUpright(){
+    UpVec = This:up()
+    DebugText += "Upright: "
+    if(RD:hitWorld() == 1){
+        DebugText += "YES"
+        return 1
+    } else {
+        DebugText += "NO"
+        return 0
+    }
+}
+Upright = 1
+AngForce = -E:angVel()
+if(Height != 0) {
+    Target = Height+E:height()
+}
+Dist = RD:distance()
+if(Dist >= 1){
+    Force = ((Target-Dist) - E:vel():z()) * (TMass+entity():mass())
+} else {
+    Force = ((Dheight-E:pos():z()) - E:vel():z())*(TMass+This:mass())
+}
+E:applyForce(vec(0,0,Force))
+#Use quaternions for stabilization along the pitch and roll axis
+CurrentQuat = quat(E:angles())
+TargetQuat = quat(ang(0,E:angles():yaw(),0))
+Q = TargetQuat/CurrentQuat
+Torque = E:toLocal(rotationVector(Q)+E:pos())
+E:applyTorque((Torque - E:angVelVector())*TIner)
+
+#Triggers
+#RR = 1
+#RL = 4
+#RF = 2
+#RB = 7
+Triggers = 0
+
+NT = 0
+
+
+if(RR:hit()){
+    E:applyForce(-RV*E:inertia())
+    Triggers += 1
+} else {
+    NT = -1
+}
+if(RL:hit()){
+    E:applyForce(-LV*E:inertia())
+    Triggers += 4
+}
+if(RB:hit()){
+    E:applyForce(-BV*E:inertia())
+    Triggers += 7
+}
+if(RF:hit() || Phase == 1){
+    TQ = quat()
+    if(Phase == 0){
+        TQ = quat(ang(0,E:angles():yaw()-90,0))
+        if(Triggers == 1){
+            TQ = quat(ang(0,E:angles():yaw()+90,0))
+        } elseif(Triggers == 5){
+            if(RL:distance()>RR:distance() || RR:distance() == 0){
+                TQ = quat(ang(0,E:angles():yaw()+90,0))
+            }
+        } elseif(Triggers == 8){
+            TQ = quat(ang(0,E:angles():yaw()+45,0))
+        } elseif(Triggers == 11){
+            TQ = quat(ang(0,E:angles():yaw()-45,0))
+        } elseif(Triggers == 12) {
+            if(RL:distance()>RR:distance() || RR:distance() == 0){
+                TQ = quat(ang(0,E:angles():yaw()+90,0))
+            }
+        }
+    } else {
+        TQ = quat(ang(0,PhaseTarget,0))
+    }
+
+    Q = TQ/CurrentQuat
+    TR = E:toLocal(rotationVector(Q)+E:pos())
+    E:applyTorque((TR - E:angVelVector())*TIner)
+    print("RF, "+RF:distance())
+    Triggers = 2
+    if(Phase == 1){
+        if(E:angles():yaw() == PhaseTarget){
+            Phase = 0
+        }
+    }
+}
+if(Triggers == 2){
+}
+if(RF:distance() <= 0 && !RF:hit() && Phase != 1){
+    E:applyForce(FV*E:inertia())
+}
+if(Triggers == 0 && RF:hit()){
+    E:applyForce(BV*E:inertia())
+}
+if(E:vel():length()>50 || Phase == 1){
+    E:applyForce(-E:vel())
+}
+if(NT == -1 && Phase != 1){
+    A = randint(0,1)
+    if(A){
+        PhaseTarget = E:angles():yaw()-90
+        Phase = 1
+        print("Phase 1")
+    } else {
+        E:applyForce(FV*TIner)
+    }
+}
