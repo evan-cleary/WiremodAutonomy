@@ -1,13 +1,13 @@
 #[
 	Issues:
 		- Not optimized
-		- Bot could follow in front of target instead of behind, needs to track target
-		viewpoint and accommodate accordingly
+		- Does not like going up buildings or other vertical objects
 ]#
 @name Target Controller
 @inputs 
-@outputs Height:number
+@outputs Height:number Idle
 @persist Tail Height:number This:entity E:entity TargetEnt:entity DistanceVec:vector
+@persist StorHeight:number
 @trigger 
 
 
@@ -16,10 +16,12 @@ if(first()){
     This:setMass(0)
     E = This:isWeldedTo()
     Tail = 0
+    Idle = 1
     runOnChat(1)
     runOnTick(1)
     DistanceVec = vec(100,50,0)
     TargetEnt = noentity()
+    StorHeight = 50
 }
 
 if(lastSpoke() == This:owner() && chatClk() == 1){
@@ -46,12 +48,14 @@ if(lastSpoke() == This:owner() && chatClk() == 1){
     if(Text:sub(0,7) == "!hover "){
         hint("Changing hover height",5)
         Height = Text:replace("!hover ", ""):trim():toNumber()
+        StorHeight = Height
         This:owner():soundPlay(1,2,"npc/attack_helicopter/aheli_charge_up.wav")
     }
     if(Text == "!stay"){
         TargetEnt = noentity()
         E:soundPlay(2,1,"npc/dog/dog_idle4.wav")
         hint("Staying put",5)
+        Idle = 1
     }
     if(Text == "!come") {
         TargetEnt = This:owner()
@@ -68,14 +72,25 @@ if(lastSpoke() == This:owner() && chatClk() == 1){
     }
 }
 
+function vector transformTargetVec(Vec:vector){
+    #Add 210 Degrees to the eye position yaw to give
+    #the back left positioning around the target
+    Yaw = TargetEnt:eyeAngles():yaw() + 210
+    return vec(sqrt(2)*Vec:x()*cos(Yaw),sqrt(2)*Vec:y()*sin(Yaw),Vec:z())
+}
+
+
 if(TargetEnt != noentity()){
-    DistPos = (TargetEnt:pos()+DistanceVec)
+    DistPos = (TargetEnt:pos()+transformTargetVec(DistanceVec))
     XForce = (DistPos:x() - E:pos():x())
     YForce = (DistPos:y() - E:pos():y())
     E:applyForce(vec(XForce,YForce,0))
 	#Smooths travel, uncontrolled acceleration otherwise
     E:applyForce(-E:vel())
+    Height = TargetEnt:height() + StorHeight
+    Idle = 0
 } else {
+    Height = StorHeight
     E:applyForce(-E:vel())
 }
 
