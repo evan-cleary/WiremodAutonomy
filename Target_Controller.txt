@@ -1,10 +1,11 @@
 #[
 	Issues:
-		- Not optimized
-		- Does not like going up buildings or other vertical objects
+		- Further optimization needed
+		- Does not like v-clip with new height system
+		- !Stay command sends hint command twice on execution
 ]#
 @name Target Controller
-@inputs 
+@inputs RelHeight:number
 @outputs Height:number Idle
 @persist Tail Height:number This:entity E:entity TargetEnt:entity DistanceVec:vector
 @persist StorHeight:number
@@ -22,6 +23,22 @@ if(first()){
     DistanceVec = vec(100,50,0)
     TargetEnt = noentity()
     StorHeight = 50
+    function vector transformTargetVec(Vec:vector){
+        #Add 210 Degrees to the eye position yaw to give
+        #the back left positioning around the target
+        Yaw = TargetEnt:eyeAngles():yaw() + 210
+        return vec(sqrt(2)*Vec:x()*cos(Yaw),sqrt(2)*Vec:y()*sin(Yaw),Vec:z())
+    }
+    
+    function number heightDiff(ZTarget){
+        Ez = E:pos():z()
+        Tz = TargetEnt:pos():z()
+        HTarget = ZTarget
+        if(Tz+ZTarget>Ez){
+            HTarget = (ZTarget + (Tz + RelHeight))
+        }
+        return HTarget
+    }
 }
 
 if(lastSpoke() == This:owner() && chatClk() == 1){
@@ -72,25 +89,17 @@ if(lastSpoke() == This:owner() && chatClk() == 1){
     }
 }
 
-function vector transformTargetVec(Vec:vector){
-    #Add 210 Degrees to the eye position yaw to give
-    #the back left positioning around the target
-    Yaw = TargetEnt:eyeAngles():yaw() + 210
-    return vec(sqrt(2)*Vec:x()*cos(Yaw),sqrt(2)*Vec:y()*sin(Yaw),Vec:z())
-}
-
 
 if(TargetEnt != noentity()){
     DistPos = (TargetEnt:pos()+transformTargetVec(DistanceVec))
     XForce = (DistPos:x() - E:pos():x())
     YForce = (DistPos:y() - E:pos():y())
     E:applyForce(vec(XForce,YForce,0))
-	#Smooths travel, uncontrolled acceleration otherwise
     E:applyForce(-E:vel())
-    Height = TargetEnt:height() + StorHeight
+    Height = heightDiff(TargetEnt:height()+ StorHeight)
     Idle = 0
 } else {
-    Height = StorHeight
+    Height = 25
     E:applyForce(-E:vel())
 }
 

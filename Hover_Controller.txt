@@ -1,21 +1,14 @@
 #[
 	Issues:
-		- Not optimized
+		- Could use further optimization
 ]#
 @name Hover Controller
 @inputs Height:number
-@outputs DebugText:string
+@outputs RelHeight:number
 @persist TMass TIner:vector Dheight:number E:entity Target This:entity DebugText:string RD:ranger
 @trigger 
 
-function defineRanger(){
-    rangerHitWater(1)
-    rangerHitEntities(1)
-    rangerDefaultZero(1)
-}
-
 #We implement the Hover Controller for Hover and Stabilization
-
 if(first()){
     This = entity()
     This:setMass(0)
@@ -24,8 +17,12 @@ if(first()){
     Target = 50+E:height()
     Dheight  = 50 + E:pos():z()
     runOnTick(1)
+    function defineRanger(){
+        rangerHitWater(1)
+        rangerHitEntities(1)
+        rangerDefaultZero(1)
+    }
     defineRanger()
-    #E:soundPlay(3,0,"npc/dog/dog_idlemode_loop1.wav")
     TMass = E:mass()
     TIner = E:inertia()
     foreach(K,V:entity=E:getConstraints()){
@@ -34,34 +31,21 @@ if(first()){
 }
 #vec(X,Y,Z)
 RD = rangerOffset(1000,This:pos(),vec(0,0,-1))
-
-
-function number isUpright(){
-    UpVec = This:up()
-    DebugText += "Upright: "
-    if(RD:hitWorld() == 1){
-        DebugText += "YES"
-        return 1
-    } else {
-        DebugText += "NO"
-        return 0
-    }
-}
-Upright = 1
-AngForce = -E:angVel()
 if(Height != 0) {
     Target = Height+E:height()
 }
 Dist = RD:distance()
 if(Dist >= 1){
-    Force = ((Target-Dist) - E:vel():z()) * (TMass+entity():mass())
+    Force = ((Target-Dist) - E:vel():z()) * (TMass+This:mass())
 } else {
     Force = ((Dheight-E:pos():z()) - E:vel():z())*(TMass+This:mass())
 }
+RelHeight = Dist
 E:applyForce(vec(0,0,Force))
 #Use quaternions for stabilization along the pitch and roll axis
-CurrentQuat = quat(E:angles())
-TargetQuat = quat(ang(0,E:angles():yaw(),0))
+Ang = E:angles()
+CurrentQuat = quat(Ang)
+TargetQuat = quat(ang(0,Ang:yaw(),0))
 Q = TargetQuat/CurrentQuat
 Torque = E:toLocal(rotationVector(Q)+E:pos())
 E:applyTorque((Torque - E:angVelVector())*TIner)
